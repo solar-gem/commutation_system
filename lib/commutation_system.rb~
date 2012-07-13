@@ -1,0 +1,5 @@
+require "commutation_system/version"
+
+module CommutationSystem
+  # Your code goes here...
+end
