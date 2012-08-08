@@ -356,7 +356,6 @@ class ConnectionTelnet_Switch < ConnectionTelnet
   end
 end
 
-# Коммутатор NGN. SoftX3000
 class ConnectionTelnet_SoftX < ConnectionTelnet
   include ConsoleConfirmation
   def initialize(options)
