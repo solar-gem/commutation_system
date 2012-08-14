@@ -1,0 +1,21 @@
+Trying 10.52.251.12...
+Connected to 10.52.251.12.
++++    HUAWEI UMG8900 umg1-ims        2012-08-10 13:16:09
+O&M    #2         
+%%LGI:OP="admin", PWD="*****";%%
+RETCODE = 0  accomplished
+
+
+---    END
+
++++    HUAWEI UMG8900 umg1-ims        2012-08-10 13:16:09
+O&M    #3         
+%%DSP TIME:;%%
+RETCODE = 0  accomplished
+
+Host time
+---------
+Current Host Time = 2012-08-10 13:16:09
+
+---    END
+

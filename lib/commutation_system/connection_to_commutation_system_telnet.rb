@@ -16,6 +16,7 @@ require 'timeout'     # Таймер выполнения кода
 Answer = Struct.new(:command, :start_time, :data, :successful, :retcode,
   :time, :connection_integrity, :error)
 
+
 # Подключение осуществляется по не стандартному порту telnet
 # Авторизация производится с помощью команды
 # Ответ на команду содержит подтверждение её выполнения и код ошибки
@@ -99,7 +100,7 @@ end
 # Ответ на команду не содержит подтверждение её выполнения и код ошибки
 # UA5000, коммутаторы
 module ConsoleNotConfirmation #ConsolePortTelnet
- 
+
   # Определение приглашения командной строки
   def invitation(str)
     array_host_name = /^\S+>\z/.match(str)
@@ -107,19 +108,20 @@ module ConsoleNotConfirmation #ConsolePortTelnet
   end
 
   # Авторизация по запросу имени пользователя и пароля
-  def login    
+  def login
     sleep 0.5
-    @answer = Answer.new("login", Time.new, '', false, nil, nil, false, nil) 
+    @answer = Answer.new("login", Time.new, '', false, nil, nil, false, nil)
     begin
+
       timeout(20) {
-        @connection.login("Name" => @options[:username],
+      @connection.login("Name" => @options[:username],
           "LoginPrompt" => @options[:login_prompt],
           "Password" => @options[:password],
           "PasswordPrompt" => @options[:password_prompt]) do |recvdata|
-          @answer[:data] << recvdata if recvdata          
+          @answer[:data] << recvdata if recvdata
         end
-      }            
-      # Выявляем приглашение командной строки      
+      }
+      # Выявляем приглашение командной строки
       @options[:prompt] = invitation(@answer[:data]) unless @options[:prompt]
       @answer[:successful] = true
       @answer[:connection_integrity] = true
@@ -129,11 +131,13 @@ module ConsoleNotConfirmation #ConsolePortTelnet
       @answer[:time] = Time.new - @answer[:start_time]
       @connect = false
       @login = false
-    end    
-  end  
+    end
+  end
+
+
 
   # Отправка команды на станцию с ожиданием ответа
-  def cmd(command, timeout_total = 60, timeout_waitfor = 60)    
+  def cmd(command, timeout_total = 60, timeout_waitfor = 60)
     @answer = Answer.new(command, Time.new, '', true, nil, nil, false, nil)
     # Генерация исключения, если флаг состояния соединения (@connect) = false
     unless @connect
@@ -144,7 +148,7 @@ module ConsoleNotConfirmation #ConsolePortTelnet
       timeout(timeout_total + 1) do
         begin
           continue = false # Требуется ли ожидание ответа на команду. Это когда результат на команду выдаётся с задержкой
-          @connection.cmd("String" => command, "Timeout" => timeout_waitfor) do |temp_data|            
+          @connection.cmd("String" => command, "Timeout" => timeout_waitfor) do |temp_data|
             @answer[:data] << temp_data
             # Определяем требуется ли дополнительное ожидание в ответ на команду
             @options[:array_continue_regexp].each {|array_regexp| continue = true if temp_data[array_regexp]}
@@ -185,7 +189,7 @@ module ConsoleNotConfirmation #ConsolePortTelnet
     # Поиск сообщений о ошибочности выполнения команды
     @options[:retcode_err_regexp].each do |array_regexp|
       @answer[:successful] = false if @answer[:data][array_regexp]
-    end   
+    end
 
     @answer[:time] = Time.new - @answer[:start_time] # время выполнения команды на станции
     @answer
@@ -201,16 +205,17 @@ class ConnectionTelnet
   #      @@options.store(key, value)
   #    end
   #  end
-  
+
 
   attr_reader :answer, :options
 
   def initialize(options)
     @options = Hash.new
     @options = options
-    @options[:waittime] = 0.5 unless @options.has_key?(:waittime)    
+    @options[:waittime] = 0 unless @options.has_key?(:waittime)
     @connect = false   # Состояние telnet подключения
     @login = false     # Авторизация на устройстве
+
   end
 
   def options_add(key, value)
@@ -221,7 +226,7 @@ class ConnectionTelnet
   def verification
     raise ArgumentError.new("There is no option :host") unless @options.has_key?(:host)
     raise ArgumentError.new("There is no option :username") unless @options.has_key?(:username)
-    raise ArgumentError.new("There is no option :password") unless @options.has_key?(:password)    
+    raise ArgumentError.new("There is no option :password") unless @options.has_key?(:password)
     raise ArgumentError.new("There is no option :port") unless @options.has_key?(:port)
   end
 
@@ -230,11 +235,17 @@ class ConnectionTelnet
     @answer = Answer.new  # Данные выполнения команды на станции
     verification # Проверка обязательных параметров
     begin
-      @connection = Net::Telnet::new("Host"  => @options[:host],
-        "Port"  => @options[:port],
-        "Prompt"     => @options[:end_report_regexp], # Признак окончания вывода ответа на команду
-        "Waittime" => @options[:waittime],
-        "Output_log" => File.join(WORK_DIR, "output_#{@options[:name]}_#{Time.now.strftime("%Y_%m_%d_%H_%M_%S")}.log"))
+      # Формируем данные для подключения по telnet к станции (дополняем строку подключения)
+      data_connect = {
+        "Host"     => @options[:host],
+        "Port"     => @options[:port],
+        "Prompt"   => @options[:end_report_regexp], # Признак окончания вывода ответа на команду
+        "Waittime" => @options[:waittime]
+      }
+      # Добавление параметра ведения log файла обмена данными со станцией
+      data_connect.store("Output_log", File.join(@options[:log_path], @options[:log_name])) if @options[:log]
+      data_connect.store("Dump_log", "dump_log")
+      @connection = Net::Telnet::new(data_connect)
         #"Dump_log"   => "dump_log")
       #rescue Errno::EHOSTUNREACH # Сделана попытка выполнить операцию на сокете для недоступного хоста
     rescue => err
@@ -262,6 +273,7 @@ class ConnectionTelnet
     if @connection
       @connection.close unless @connection.sock.closed? # Если соединение уже не закрыто, то закрываем
     end
+    return true
   end
 # !!!!!!!!!!!!!!!!!!!!!!!!!
 # !!!!!!!!!!!!!!!!!!!!!!!!!
@@ -276,19 +288,19 @@ class ConnectionTelnet
   # _match Признак окончания вывода данных со станции
   def wait(_match = @options[:end_report_regexp])
     @answer = Answer.new(nil, Time.new, '', false, [], nil, false, nil)
-    begin      
+    begin
       @connection.waitfor("Match" => _match,
         "Timeout" => false,
         "FailEOF" => true){ |temp_data| @answer[:data] << temp_data }
       @answer[:successful] = true
-      @answer[:connection_integrity] = true      
+      @answer[:connection_integrity] = true
     rescue => err
       puts err
       puts "280"
-      
+
       @answer[:error] = err
       close
-      raise err      
+      raise err
     end
     @answer[:time] = Time.new - @answer[:start_time] # время выполнения команды на станции
     @answer
@@ -350,8 +362,8 @@ class ConnectionTelnet_Switch < ConnectionTelnet
   end
 
   # Определение приглашения командной строки
-  def invitation(str)   
-    array_host_name = /^<\S+>/.match(str)    
+  def invitation(str)
+    array_host_name = /^<\S+>/.match(str)
     return array_host_name[0].delete!("<").chop!
   end
 end
@@ -372,6 +384,14 @@ class ConnectionTelnet_SoftX < ConnectionTelnet
   end
 end
 
+# Шлюз сигнализации UMG
+class ConnectionTelnet_UMG < ConnectionTelnet_SoftX
+  def initialize(options)
+    super(options)
+  end
+end
+
+
 class ConnectionTelnet_CC08 < ConnectionTelnet
   include ConsoleConfirmation
   def initialize(options)
@@ -386,7 +406,7 @@ class ConnectionTelnet_CC08 < ConnectionTelnet
 
     @options[:port] = 6000 unless @options.has_key?(:port) # Telnet порт для подключения
   end
-  
+
   # Авторизация
   def login
     super
@@ -394,6 +414,7 @@ class ConnectionTelnet_CC08 < ConnectionTelnet
     @login
   end
 end
+
 
 
 
@@ -416,24 +437,24 @@ class ConnectionTelnet_NeaxE < ConnectionTelnet
 
     @options[:end_report_alarm] =@options[:end_report_regexp]
 
-    @options[:port] = 5017  unless @options.has_key?(:port) # Telnet порт для подключения 
+    @options[:port] = 5017  unless @options.has_key?(:port) # Telnet порт для подключения
   end
 
  # Авторизация по запросу имени пользователя и пароля
-  def login    
+  def login
     sleep 0.5
-    @answer = Answer.new("login", Time.new, '', false, nil, nil, false, nil) 
+    @answer = Answer.new("login", Time.new, '', false, nil, nil, false, nil)
     begin
       timeout(4) {
         @connection.login("Name" => @options[:username],
           "LoginPrompt" => @options[:login_prompt],
           "Password" => @options[:password],
           "PasswordPrompt" => @options[:password_prompt]){|recvdata| @answer[:data] << recvdata if recvdata}
-      }      
-      # Проверяем успешность соединения путём сравнения с шаблоном 
-      # не правильной авторизации      
+      }
+      # Проверяем успешность соединения путём сравнения с шаблоном
+      # не правильной авторизации
       @answer[:time] = Time.new - @answer[:start_time]
-      unless @answer[:data] =~ @options[:login_err_regexp] 
+      unless @answer[:data] =~ @options[:login_err_regexp]
         @login = true
         @answer[:successful] = true
       else
@@ -442,24 +463,24 @@ class ConnectionTelnet_NeaxE < ConnectionTelnet
         @answer[:successful] = false
       end
       @answer[:connection_integrity] = true
-    rescue Timeout::Error  # Превышен интервал ожидания авторизации     
+    rescue Timeout::Error  # Превышен интервал ожидания авторизации
       @answer[:error] = 'Timeout'
       @answer[:time] = Time.new - @answer[:start_time]
       @connect = false
       @login = false
-    end    
-  end  
-  
-  
+    end
+  end
+
+
 end
 
 # Станции Neax Sigma (ОПТС-255).
 class ConnectionTelnet_NeaxSigma < ConnectionTelnet
   include ConsoleNotConfirmation
-    
-  
 
-  
+
+
+
   def initialize(options)
     super(options)
     # Приглашение к вводу имени пользователя при авторизации

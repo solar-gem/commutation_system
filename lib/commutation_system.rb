@@ -1,10 +1,10 @@
 require "commutation_system/version"
 
 # Реализация подключения к станции по telnet
-require "commutation_system/commutation_system_telnet"
+require "commutation_system/connection_to_commutation_system_telnet"
 
 # Реализация подключения к станции по протоколу soap
-require "commutation_system/commutation_system_soap"
+require "commutation_system/connection_to_commutation_system_soap"
 
 
 module CommutationSystem
@@ -47,40 +47,80 @@ module CommutationSystem
     # host:     IP станции.
     # username: Имя прользователя.
     # password: Пароль.
+    # log:      true || false Нужно ли вести log файл обмена данными со станцией.
+    # log_path: Директория где будут храниться log файлы обмена данными со станцией
+    # log_name: Название log файла обмена данными со станцией
+    #
 
+    attr_reader :connection_telnet # Создаём объект подключения к станции по протоколу telnet
     def initialize(options)
-      @options = options
       verification # Проверка обязательных параметров
 
+
+      # Анализ параметров касающихся log файлов обмена данными со станцией.
+      unless @options.has_key?(:log)
+        if @options.has_key?(:log_path) || @options.has_key?(:log_name)
+          @options[:log] = true
+        else
+          @options[:log] = false
+        end
+      end
+      @options[:log_path] = '.' unless @options.has_key?(:log_path)
+      @options[:log_name] = "output_#{Time.now.strftime("%Y_%m_%d_%H_%M_%S")}.log" unless @options.has_key?(:log_name)
+
+
+      # Создаём объект подключения к станции по протоколу telnet
+      init_telnet
     end
 
     # Проверка обязательных параметров
     def verification
       # :type => тип станции
       raise ArgumentError.new("There is no option :type") unless @options.has_key?(:type)
-
       raise ArgumentError.new("There is no option :host") unless @options.has_key?(:host)
       raise ArgumentError.new("There is no option :username") unless @options.has_key?(:username)
       raise ArgumentError.new("There is no option :password") unless @options.has_key?(:password)
     end
 
-
-
+    # Создаём объект подключения к станции по протоколу telnet
+    def init_telnet
+      case @options[:type]
+      when :SoftX
+        @connection_telnet =  ConnectionTelnet_SoftX.new(@options)
+      when :IMS
+        @connection_telnet =  ConnectionTelnet_IMS.new(@options)
+      when :UMG
+        @connection_telnet =  ConnectionTelnet_UMG.new(@options)
+      end
+    end
   end
 
-  class CommutationSystem_IMS < CommutationSystem
+  class IMS < CommutationSystem
+    def initialize(options)
+      @options = options
+      @options[:type] = :IMS
+      super # Вызываем конструктор предка (CommutationSystem)
+    end
   end
 
   # Работа с коммутатором NGN SoftX3000
-  class CommutationSystem_SoxtX < CommutationSystem
-    def initialize
-      super(options) # Вызываем конструктор предка (CommutationSystem)
-      # Создаём объект подключения к станции по протоколу telnet
-      @connection_telnet =  ConnectionTelnet_SoftX.new(@options)
-
+  class SoftX < CommutationSystem
+    def initialize(options)
+      @options = options
+      @options[:type] = :SoftX
+      super # Вызываем конструктор предка (CommutationSystem)
     end
-
   end
+
+  # Работа с UMG
+  class UMG < CommutationSystem
+    def initialize(options)
+      @options = options
+      @options[:type] = :UMG
+      super # Вызываем конструктор предка (CommutationSystem)
+    end
+  end
+
 end
 
 
